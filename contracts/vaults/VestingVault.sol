@@ -9,9 +9,6 @@ import "../interfaces/IVotingVault.sol";
 
 abstract contract AbstractVestingVault is IVotingVault {
     // Bring our libraries into scope
-    using History for *;
-    using VestingVaultStorage for *;
-    using Storage for *;
 
     // NOTE: There is no emergency withdrawal, any funds not sent via deposit() are
     // unrecoverable by this version of the VestingVault
@@ -216,8 +213,12 @@ abstract contract AbstractVestingVault is IVotingVault {
 
         // update the delegatee's voting power
         History.HistoricalBalances memory votingPower = _votingPower();
-        uint256 delegateeVotes = votingPower.loadTop(grant.delegatee);
-        votingPower.push(grant.delegatee, delegateeVotes + newVotingPower);
+        uint256 delegateeVotes = History.loadTop(votingPower, grant.delegatee);
+        History.push(
+            votingPower,
+            grant.delegatee,
+            delegateeVotes + newVotingPower
+        );
 
         emit VoteChange(grant.delegatee, _who, int256(uint256(newVotingPower)));
     }
@@ -243,8 +244,9 @@ abstract contract AbstractVestingVault is IVotingVault {
 
         // update the delegatee's voting power
         History.HistoricalBalances memory votingPower = _votingPower();
-        uint256 delegateeVotes = votingPower.loadTop(grant.delegatee);
-        votingPower.push(
+        uint256 delegateeVotes = History.loadTop(votingPower, grant.delegatee);
+        History.push(
+            votingPower,
             grant.delegatee,
             delegateeVotes - grant.latestVotingPower
         );
@@ -292,11 +294,15 @@ abstract contract AbstractVestingVault is IVotingVault {
         require(_to != grant.delegatee, "Already delegated");
         History.HistoricalBalances memory votingPower = _votingPower();
 
-        uint256 oldDelegateeVotes = votingPower.loadTop(grant.delegatee);
+        uint256 oldDelegateeVotes = History.loadTop(
+            votingPower,
+            grant.delegatee
+        );
         uint256 newVotingPower = _currentVotingPower(grant);
 
         // Remove old delegatee's voting power and emit event
-        votingPower.push(
+        History.push(
+            votingPower,
             grant.delegatee,
             oldDelegateeVotes - grant.latestVotingPower
         );
@@ -308,11 +314,11 @@ abstract contract AbstractVestingVault is IVotingVault {
 
         // Note - It is important that this is loaded here and not before the previous state change because if
         // _to == grant.delegatee and re-delegation was allowed we could be working with out of date state.
-        uint256 newDelegateeVotes = votingPower.loadTop(_to);
+        uint256 newDelegateeVotes = History.loadTop(votingPower, _to);
 
         // add voting power to the target delegatee and emit event
         emit VoteChange(_to, msg.sender, int256(newVotingPower));
-        votingPower.push(_to, newDelegateeVotes + newVotingPower);
+        History.push(votingPower, _to, newDelegateeVotes + newVotingPower);
 
         // update grant info
         grant.latestVotingPower = uint128(newVotingPower);
@@ -368,7 +374,7 @@ abstract contract AbstractVestingVault is IVotingVault {
     ) internal {
         History.HistoricalBalances memory votingPower = _votingPower();
 
-        uint256 delegateeVotes = votingPower.loadTop(_grant.delegatee);
+        uint256 delegateeVotes = History.loadTop(votingPower, _grant.delegatee);
 
         uint256 newVotingPower = _currentVotingPower(_grant);
         // get the change in voting power. Negative if the voting power is reduced
@@ -377,13 +383,15 @@ abstract contract AbstractVestingVault is IVotingVault {
         // do nothing if there is no change
         if (change == 0) return;
         if (change > 0) {
-            votingPower.push(
+            History.push(
+                votingPower,
                 _grant.delegatee,
                 delegateeVotes + uint256(change)
             );
         } else {
             // if the change is negative, we multiply by -1 to avoid underflow when casting
-            votingPower.push(
+            History.push(
+                votingPower,
                 _grant.delegatee,
                 delegateeVotes - uint256(change * -1)
             );
@@ -406,7 +414,8 @@ abstract contract AbstractVestingVault is IVotingVault {
         History.HistoricalBalances memory votingPower = _votingPower();
         // Find the historical data and clear everything more than 'staleBlockLag' into the past
         return
-            votingPower.findAndClear(
+            History.findAndClear(
+                votingPower,
                 user,
                 blockNumber,
                 block.number - staleBlockLag
@@ -425,7 +434,7 @@ abstract contract AbstractVestingVault is IVotingVault {
         // Get our reference to historical data
         History.HistoricalBalances memory votingPower = _votingPower();
         // Find the historical data
-        return votingPower.find(user, blockNumber);
+        return History.find(votingPower, user, blockNumber);
     }
 
     /// @notice Calculates how much a grantee can withdraw
