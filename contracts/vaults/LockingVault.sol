@@ -8,10 +8,6 @@ import "../interfaces/IVotingVault.sol";
 import "../interfaces/ILockingVault.sol";
 
 abstract contract AbstractLockingVault is IVotingVault, ILockingVault {
-    // Bring our libraries into scope
-    using History for *;
-    using Storage for *;
-
     // Immutables are in bytecode so don't need special storage treatment
     IERC20 public immutable override token;
     // A constant which is how far back stale blocks are
@@ -77,7 +73,8 @@ abstract contract AbstractLockingVault is IVotingVault, ILockingVault {
         History.HistoricalBalances memory votingPower = _votingPower();
         // Find the historical data and clear everything more than 'staleBlockLag' into the past
         return
-            votingPower.findAndClear(
+            History.findAndClear(
+                votingPower,
                 user,
                 blockNumber,
                 block.number - staleBlockLag
@@ -96,7 +93,7 @@ abstract contract AbstractLockingVault is IVotingVault, ILockingVault {
         // Get our reference to historical data
         History.HistoricalBalances memory votingPower = _votingPower();
         // Find the historical datum
-        return votingPower.find(user, blockNumber);
+        return History.find(votingPower, user, blockNumber);
     }
 
     /// @notice Deposits and delegates voting power to an address provided with the call
@@ -139,11 +136,11 @@ abstract contract AbstractLockingVault is IVotingVault, ILockingVault {
         // Get the storage pointer
         History.HistoricalBalances memory votingPower = _votingPower();
         // Load the most recent voter power stamp
-        uint256 delegateeVotes = votingPower.loadTop(delegate);
+        uint256 delegateeVotes = History.loadTop(votingPower, delegate);
         // Emit an event to track votes
         emit VoteChange(fundedAccount, delegate, int256(amount));
         // Add the newly deposited votes to the delegate
-        votingPower.push(delegate, delegateeVotes + amount);
+        History.push(votingPower, delegate, delegateeVotes + amount);
     }
 
     /// @notice Removes tokens from this contract and the voting power they represent
@@ -159,9 +156,9 @@ abstract contract AbstractLockingVault is IVotingVault, ILockingVault {
         // Get the storage pointer
         History.HistoricalBalances memory votingPower = _votingPower();
         // Load the most recent voter power stamp
-        uint256 delegateeVotes = votingPower.loadTop(delegate);
+        uint256 delegateeVotes = History.loadTop(votingPower, delegate);
         // remove the votes from the delegate
-        votingPower.push(delegate, delegateeVotes - amount);
+        History.push(votingPower, delegate, delegateeVotes - amount);
         // Emit an event to track votes
         emit VoteChange(msg.sender, delegate, -1 * int256(amount));
         // Transfers the result to the sender
@@ -182,15 +179,15 @@ abstract contract AbstractLockingVault is IVotingVault, ILockingVault {
         // Get the storage pointer
         History.HistoricalBalances memory votingPower = _votingPower();
         // Load the old delegate's voting power
-        uint256 oldDelegateVotes = votingPower.loadTop(oldDelegate);
+        uint256 oldDelegateVotes = History.loadTop(votingPower, oldDelegate);
         // Reduce the old voting power
-        votingPower.push(oldDelegate, oldDelegateVotes - userBalance);
+        History.push(votingPower, oldDelegate, oldDelegateVotes - userBalance);
         // Emit an event to track votes
         emit VoteChange(msg.sender, oldDelegate, -1 * int256(userBalance));
         // Get the new delegate's votes
-        uint256 newDelegateVotes = votingPower.loadTop(newDelegate);
+        uint256 newDelegateVotes = History.loadTop(votingPower, newDelegate);
         // Store the increase in power
-        votingPower.push(newDelegate, newDelegateVotes + userBalance);
+        History.push(votingPower, newDelegate, newDelegateVotes + userBalance);
         // Emit an event tracking this voting power change
         emit VoteChange(msg.sender, newDelegate, int256(userBalance));
     }

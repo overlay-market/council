@@ -5,10 +5,6 @@ import "../libraries/Storage.sol";
 import "./StorageRead.sol";
 
 contract MockTokenLogic is ReadAndWriteAnyStorage {
-    // This contract is an implementation target for the proxy so uses the
-    // proxy storage lib for safe portable slotting cross upgrades.
-    using Storage for *;
-
     // We don't declare them but the following are our state variables
     // uint256 totalSupply
     // address owner
@@ -32,7 +28,7 @@ contract MockTokenLogic is ReadAndWriteAnyStorage {
 
     constructor(address _owner) {
         Storage.Address storage owner = Storage.addressPtr("owner");
-        owner.set(_owner);
+        Storage.set(owner, _owner);
     }
 
     function transfer(address to, uint256 amount) external {
@@ -49,22 +45,22 @@ contract MockTokenLogic is ReadAndWriteAnyStorage {
 
     function totalSupply() external view returns (uint256) {
         Storage.Uint256 storage _totalSupply = _getTotalSupply();
-        return (_totalSupply.load());
+        return (Storage.load(_totalSupply));
     }
 
-    modifier onlyOwner {
+    modifier onlyOwner() {
         Storage.Address storage owner = _getOwner();
-        require(msg.sender == owner.load(), "unauthorized");
+        require(msg.sender == Storage.load(owner), "unauthorized");
         _;
     }
 
-    function mint(address to, uint256 amount) external onlyOwner() {
+    function mint(address to, uint256 amount) external onlyOwner {
         Storage.Uint256 storage _totalSupply = _getTotalSupply();
         mapping(address => uint256) storage balances = _getBalancesMapping();
 
         balances[to] += amount;
-        uint256 localTotalSupply = _totalSupply.load();
-        _totalSupply.set(localTotalSupply + amount);
+        uint256 localTotalSupply = Storage.load(_totalSupply);
+        Storage.set(_totalSupply, localTotalSupply + amount);
     }
 
     // A function purely for testing which is a totally unrestricted mint
@@ -73,7 +69,7 @@ contract MockTokenLogic is ReadAndWriteAnyStorage {
         mapping(address => uint256) storage balances = _getBalancesMapping();
 
         balances[to] += amount;
-        uint256 localTotalSupply = _totalSupply.load();
-        _totalSupply.set(localTotalSupply + amount);
+        uint256 localTotalSupply = Storage.load(_totalSupply);
+        Storage.set(_totalSupply, localTotalSupply + amount);
     }
 }
